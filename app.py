@@ -1,247 +1,291 @@
 import streamlit as st
-st.set_page_config(page_title="Controle Financeiro", page_icon="favicon.png")
+st.set_page_config(
+    page_title="Controle Financeiro",
+    page_icon="favicon.png",
+    layout="wide"
+)
 
 import pandas as pd
 import datetime as dt
 import uuid
 import os
+from dateutil.relativedelta import relativedelta
 
 ARQUIVO = "financeiro.csv"
 
-# ----------------- Funções auxiliares -----------------
+
+# ---------------- Funções auxiliares ----------------
 
 def carregar_dados():
     if os.path.exists(ARQUIVO):
-        df = pd.read_csv(ARQUIVO, parse_dates=["data", "data_vencimento"])
+        df = pd.read_csv(ARQUIVO, dtype=str)
+        if "valor" in df.columns:
+            df["valor"] = df["valor"].astype(float)
+        return df
     else:
-        df = pd.DataFrame(columns=[
-            "data", "descricao", "forma_pagamento", "categoria",
-            "operadora_banco", "tipo", "valor",
-            "parcelas_total", "parcela_atual",
-            "data_vencimento", "id_compra"
-        ])
-    return df
+        colunas = [
+            "id",
+            "data_lancamento",
+            "descricao",
+            "categoria",
+            "forma_pagamento",
+            "operadora",
+            "tipo",
+            "valor",
+            "parcela_atual",
+            "total_parcelas",
+            "vencimento"
+        ]
+        return pd.DataFrame(columns=colunas)
 
 def salvar_dados(df):
     df.to_csv(ARQUIVO, index=False)
 
-def gerar_parcelas(lancamento):
-    """Gera linhas de parcelas futuras a partir do primeiro lançamento."""
+def mascara_valor(valor_digitado):
+    numeros = ''.join(filter(str.isdigit, valor_digitado))
+    if numeros == "":
+        return "0,00"
+    while len(numeros) < 3:
+        numeros = "0" + numeros
+    return f"{numeros[:-2]},{numeros[-2:]}"
+
+
+def converter_para_float(valor_formatado):
+    return float(valor_formatado.replace(".", "").replace(",", "."))
+
+
+def gerar_parcelas(id_compra, data_lancamento, descricao, categoria,
+                   forma_pagamento, operadora, tipo,
+                   valor_total, qtd_parcelas, primeiro_vencimento):
     linhas = []
-    parcelas_total = lancamento["parcelas_total"]
-    data_base = lancamento["data_vencimento"]
-    for p in range(1, parcelas_total + 1):
-        linha = lancamento.copy()
-        linha["parcela_atual"] = p
-        # cada parcela em meses subsequentes
-        linha["data_vencimento"] = data_base + pd.DateOffset(months=p - 1)
+    valor_parcela = round(valor_total / qtd_parcelas, 2)
+
+    for i in range(qtd_parcelas):
+        vencimento_parcela = primeiro_vencimento + relativedelta(months=i)
+        linha = {
+            "id": id_compra,
+            "data_lancamento": data_lancamento.strftime("%Y-%m-%d"),
+            "descricao": descricao,
+            "categoria": categoria,
+            "forma_pagamento": forma_pagamento,
+            "operadora": operadora,
+            "tipo": tipo,
+            "valor": valor_parcela,
+            "parcela_atual": str(i + 1),
+            "total_parcelas": str(qtd_parcelas),
+            "vencimento": vencimento_parcela.strftime("%Y-%m")
+        }
         linhas.append(linha)
-    return pd.DataFrame(linhas)
 
-# ----------------- Configuração de tema escuro -----------------
+    return linhas
 
-st.set_page_config(page_title="Controle Financeiro", layout="wide")
+def formatar_moeda(valor):
+    return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
-# Força um visual escuro (Streamlit já tem tema dark nas configs,
-# mas aqui damos um toque extra via CSS)
-st.markdown("""
-<style>
-body {
-    background-color: #121212;
-    color: #e0e0e0;
-}
-[data-testid="stSidebar"] {
-    background-color: #1e1e1e;
-}
-</style>
-""", unsafe_allow_html=True)
-
-# ----------------- Carregar dados -----------------
+# ---------------- Carregar dados ----------------
 
 df = carregar_dados()
 
-# ----------------- Sidebar: filtros e navegação -----------------
+# ---------------- Layout com sidebar ----------------
 
-st.sidebar.title("Filtros e Navegação")
-
-# Filtro de mês/ano
-meses = sorted(df["data"].dropna().dt.to_period("M").astype(str).unique()) if not df.empty else []
-mes_selecionado = st.sidebar.selectbox("Mês (lançamento)", options=["Todos"] + meses)
-
-meses_venc = sorted(df["data_vencimento"].dropna().dt.to_period("M").astype(str).unique()) if not df.empty else []
-mes_venc_selecionado = st.sidebar.selectbox("Mês (vencimento crédito)", options=["Todos"] + meses_venc)
-
-forma_pagamento_filtro = st.sidebar.multiselect(
-    "Forma de pagamento",
-    options=["Crédito", "Débito", "Pix", "Dinheiro", "Transferência", "Outro"],
-    default=[]
+st.sidebar.title("Menu")
+pagina = st.sidebar.radio(
+    "Navegação",
+    ["Dashboard", "Lançamentos", "Relatórios"]
 )
 
-categoria_filtro = st.sidebar.multiselect(
-    "Categoria",
-    options=[
-        "mercantil", "alimentação", "lazer", "educação", "saúde", "farmácia",
-        "combustível", "manutenção", "empresa", "investimentos", "empréstimos",
-        "imposto", "assinatura/stream", "salário/renda", "outros"
-    ],
-    default=[]
-)
+# ---------------- DASHBOARD ----------------
 
-operadora_filtro = st.sidebar.multiselect(
-    "Operadora/Banco",
-    options=[
-        "Itaú - Personnalité", "Itaú - Credicard", "Itaú - Gold", "Itaú - Luiza Ouro",
-        "BB - Ourocard", "Bradesco - Infinite Prime", "Bradesco - Amazon Platinum",
-        "Caixa - Sim", "Mercado Pago", "Nubank", "Santander - SX Master",
-        "Shopee - Empréstimo", "Mercado Pago - Empréstimo", "BV", "Bradesco",
-        "BB", "Caixa", "Itaú", "Nubank", "Livelo", "outros"
-    ],
-    default=[]
-)
+if pagina == "Dashboard":
+    st.title("Dashboard financeiro")
 
-pagina = st.sidebar.radio("Tela", ["Lançamentos", "Resumo por mês"])
+    if df.empty:
+        st.info("Ainda não há lançamentos cadastrados.")
+    else:
+        col_kpi1, col_kpi2, col_kpi3 = st.columns(3)
 
-# ----------------- Tela de lançamentos -----------------
+        total_geral = df["valor"].sum()
+        col_kpi1.metric("Total geral", formatar_moeda(total_geral))
 
-if pagina == "Lançamentos":
-    st.title("Lançamentos financeiros")
+        # Total do mês atual
+        mes_atual = dt.date.today().strftime("%Y-%m")
+        df_mes_atual = df[df["vencimento"] == mes_atual]
+        total_mes_atual = df_mes_atual["valor"].sum()
+        col_kpi2.metric("Total do mês atual", formatar_moeda(total_mes_atual))
 
-    st.subheader("Novo lançamento")
+        # Número de lançamentos
+        col_kpi3.metric("Quantidade de lançamentos", len(df))
+
+        st.markdown("---")
+
+        col_g1, col_g2 = st.columns(2)
+
+        # Gráfico por mês de vencimento
+        with col_g1:
+            st.subheader("Total por mês de vencimento")
+            df_mes = df.groupby("vencimento")["valor"].sum().reset_index()
+            df_mes = df_mes.sort_values("vencimento")
+            st.bar_chart(df_mes.set_index("vencimento"))
+
+        # Gráfico por categoria
+        with col_g2:
+            st.subheader("Total por categoria")
+            if "categoria" in df.columns:
+                df_cat = df.groupby("categoria")["valor"].sum().reset_index()
+                df_cat = df_cat.sort_values("valor", ascending=False)
+                st.bar_chart(df_cat.set_index("categoria"))
+            else:
+                st.info("Não há coluna de categoria para agrupar.")
+
+        st.markdown("---")
+
+        st.subheader("Tabela geral")
+        st.dataframe(df)
+
+# ---------------- LANÇAMENTOS ----------------
+
+elif pagina == "Lançamentos":
+    st.title("Lançamentos e edição")
+
+    st.header("Novo lançamento")
 
     col1, col2 = st.columns(2)
     with col1:
-        data = st.date_input("Data do lançamento", value=dt.date.today())
-        descricao = st.text_input("Descrição (estabelecimento ou fonte pagadora)")
-        tipo = st.selectbox("Tipo", ["Saída", "Entrada"])
-        valor = st.number_input("Valor (R$)", min_value=0.0, step=0.01, format="%.2f")
+        data_lancamento = st.date_input("Data de lançamento", dt.date.today())
+        descricao = st.text_input("Descrição")
+        categoria = st.text_input("Categoria")
+        forma_pagamento = st.text_input("Forma de pagamento")
     with col2:
-        forma_pagamento = st.selectbox("Forma de pagamento", ["Crédito", "Débito", "Pix", "Dinheiro", "Transferência", "Outro"])
-        categoria = st.selectbox("Categoria", [
-            "mercantil", "alimentação", "lazer", "educação", "saúde", "farmácia",
-            "combustível", "manutenção", "empresa", "investimentos", "empréstimos",
-            "imposto", "assinatura/stream", "salário/renda", "outros"
-        ])
-        operadora_banco = st.selectbox("Operadora/Banco", [
-            "Itaú - Personnalité", "Itaú - Credicard", "Itaú - Gold", "Itaú - Luiza Ouro",
-            "BB - Ourocard", "Bradesco - Infinite Prime", "Bradesco - Amazon Platinum",
-            "Caixa - Sim", "Mercado Pago", "Nubank", "Santander - SX Master",
-            "Shopee - Empréstimo", "Mercado Pago - Empréstimo", "BV", "Bradesco",
-            "BB", "Caixa", "Itaú", "Nubank", "Livelo", "outros"
-        ])
+        operadora = st.text_input("Operadora (se houver)")
+        tipo = st.selectbox("Tipo", ["Crédito", "Débito", "Dinheiro", "Pix", "Outro"])
 
-    st.subheader("Parcelamento (opcional)")
-    colp1, colp2 = st.columns(2)
-    with colp1:
-        parcelas_total = st.number_input("Número total de parcelas", min_value=1, step=1, value=1)
-    with colp2:
-        data_vencimento = st.date_input("Data de vencimento (crédito)", value=dt.date.today())
+    st.subheader("Valor e parcelamento")
+
+    colv1, colv2, colv3 = st.columns(3)
+    with colv1:
+        valor_digitado = st.text_input("Valor (R$)", value="0,00")
+        valor_formatado = mascara_valor(valor_digitado)
+        st.write("Valor formatado:", valor_formatado)
+    with colv2:
+        qtd_parcelas = st.number_input("Quantidade de parcelas", min_value=1, max_value=48, value=1)
+    with colv3:
+        primeiro_vencimento = st.date_input("Vencimento da 1ª parcela", dt.date.today())
 
     if st.button("Salvar lançamento"):
-        id_compra = str(uuid.uuid4())
+        try:
+            valor_float = converter_para_float(valor_formatado)
+            id_compra = str(uuid.uuid4())[:8]
 
-        lancamento_base = {
-            "data": pd.to_datetime(data),
-            "descricao": descricao,
-            "forma_pagamento": forma_pagamento,
-            "categoria": categoria,
-            "operadora_banco": operadora_banco,
-            "tipo": tipo,
-            "valor": valor,
-            "parcelas_total": int(parcelas_total),
-            "parcela_atual": 1,
-            "data_vencimento": pd.to_datetime(data_vencimento),
-            "id_compra": id_compra
-        }
+            linhas = gerar_parcelas(
+                id_compra=id_compra,
+                data_lancamento=data_lancamento,
+                descricao=descricao,
+                categoria=categoria,
+                forma_pagamento=forma_pagamento,
+                operadora=operadora,
+                tipo=tipo,
+                valor_total=valor_float,
+                qtd_parcelas=int(qtd_parcelas),
+                primeiro_vencimento=primeiro_vencimento
+            )
 
-        if parcelas_total > 1:
-            df_parcelas = gerar_parcelas(lancamento_base)
-            df = pd.concat([df, df_parcelas], ignore_index=True)
-        else:
-            df = pd.concat([df, pd.DataFrame([lancamento_base])], ignore_index=True)
+            df_novo = pd.DataFrame(linhas)
+            df_novo["valor"] = df_novo["valor"].astype(float)
 
-        salvar_dados(df)
-        st.success("Lançamento salvo com sucesso e parcelas geradas automaticamente!")
+            df = pd.concat([df, df_novo], ignore_index=True)
+            salvar_dados(df)
 
-    st.subheader("Lançamentos cadastrados")
+            st.success("Lançamento salvo com parcelamento automático!")
+        except Exception as e:
+            st.error(f"Erro ao salvar: {e}")
 
-    df_exibicao = df.copy()
-
-    # Aplicar filtros
-    if mes_selecionado != "Todos":
-        periodo = pd.Period(mes_selecionado)
-        df_exibicao = df_exibicao[df_exibicao["data"].dt.to_period("M") == periodo]
-
-    if mes_venc_selecionado != "Todos":
-        periodo_v = pd.Period(mes_venc_selecionado)
-        df_exibicao = df_exibicao[df_exibicao["data_vencimento"].dt.to_period("M") == periodo_v]
-
-    if forma_pagamento_filtro:
-        df_exibicao = df_exibicao[df_exibicao["forma_pagamento"].isin(forma_pagamento_filtro)]
-
-    if categoria_filtro:
-        df_exibicao = df_exibicao[df_exibicao["categoria"].isin(categoria_filtro)]
-
-    if operadora_filtro:
-        df_exibicao = df_exibicao[df_exibicao["operadora_banco"].isin(operadora_filtro)]
-
-    st.dataframe(df_exibicao)
-
-    st.markdown("### Ajuste de parcelas (antecipação)")
-    st.write("Selecione uma compra (id_compra) e ajuste o número de parcelas restantes.")
+    st.markdown("---")
+    st.header("Editar ou excluir lançamentos")
 
     if not df.empty:
-        ids = df["id_compra"].unique()
-        id_sel = st.selectbox("ID da compra", options=ids)
-        novo_total = st.number_input("Novo total de parcelas (após antecipação)", min_value=1, step=1)
+        linha_selecionada = st.selectbox(
+            "Selecione uma linha para editar ou excluir",
+            df.index,
+            format_func=lambda x: f"{df.loc[x, 'descricao']} - Parcela {df.loc[x, 'parcela_atual']}/{df.loc[x, 'total_parcelas']} - {df.loc[x, 'vencimento']}"
+        )
 
-        if st.button("Atualizar parcelas"):
-            # Filtra a compra
-            mask = df["id_compra"] == id_sel
-            df_compra = df[mask].sort_values("parcela_atual")
-            if not df_compra.empty:
-                primeira = df_compra.iloc[0]
-                primeira["parcelas_total"] = int(novo_total)
-                # Regera parcelas
-                df_novo = gerar_parcelas(primeira)
-                # Remove antigas e adiciona novas
-                df = df[~mask]
-                df = pd.concat([df, df_novo], ignore_index=True)
+        st.subheader("Dados da linha selecionada")
+
+        dados = df.loc[linha_selecionada]
+
+        nova_descricao = st.text_input("Descrição", dados["descricao"], key="edit_desc")
+        nova_categoria = st.text_input("Categoria", dados["categoria"], key="edit_cat")
+        nova_forma = st.text_input("Forma de pagamento", dados["forma_pagamento"], key="edit_forma")
+        nova_operadora = st.text_input("Operadora", dados["operadora"], key="edit_operadora")
+        novo_tipo = st.text_input("Tipo", dados["tipo"], key="edit_tipo")
+        novo_valor = st.number_input("Valor", value=float(dados["valor"]), key="edit_valor")
+        novo_vencimento = st.text_input("Vencimento (AAAA-MM)", dados["vencimento"], key="edit_venc")
+
+        col_b1, col_b2 = st.columns(2)
+        with col_b1:
+            if st.button("Salvar edição"):
+                df.loc[linha_selecionada, "descricao"] = nova_descricao
+                df.loc[linha_selecionada, "categoria"] = nova_categoria
+                df.loc[linha_selecionada, "forma_pagamento"] = nova_forma
+                df.loc[linha_selecionada, "operadora"] = nova_operadora
+                df.loc[linha_selecionada, "tipo"] = novo_tipo
+                df.loc[linha_selecionada, "valor"] = novo_valor
+                df.loc[linha_selecionada, "vencimento"] = novo_vencimento
+
                 salvar_dados(df)
-                st.success("Parcelas atualizadas com sucesso!")
-            else:
-                st.error("Compra não encontrada.")
-
-# ----------------- Tela de resumo por mês -----------------
-
-elif pagina == "Resumo por mês":
-    st.title("Resumo financeiro por mês")
-
-    st.write("Selecione um ou mais meses para ver o balanço.")
-
-    meses_disponiveis = sorted(df["data"].dropna().dt.to_period("M").astype(str).unique()) if not df.empty else []
-    meses_escolhidos = st.multiselect("Meses (lançamento)", options=meses_disponiveis, default=meses_disponiveis[:1])
-
-    if meses_escolhidos:
-        mask = df["data"].dt.to_period("M").astype(str).isin(meses_escolhidos)
-        df_resumo = df[mask]
-
-        total_entradas = df_resumo[df_resumo["tipo"] == "Entrada"]["valor"].sum()
-        total_saidas = df_resumo[df_resumo["tipo"] == "Saída"]["valor"].sum()
-        saldo = total_entradas - total_saidas
-
-        colr1, colr2, colr3 = st.columns(3)
-        with colr1:
-            st.markdown("#### Total de entradas (R$)")
-            st.markdown(f"<h3 style='color:#4caf50;'>R$ {total_entradas:,.2f}</h3>", unsafe_allow_html=True)
-        with colr2:
-            st.markdown("#### Total de saídas (R$)")
-            st.markdown(f"<h3 style='color:#f44336;'>R$ {total_saidas:,.2f}</h3>", unsafe_allow_html=True)
-        with colr3:
-            st.markdown("#### Saldo final (R$)")
-            cor_saldo = "#4caf50" if saldo >= 0 else "#f44336"
-            st.markdown(f"<h3 style='color:{cor_saldo};'>R$ {saldo:,.2f}</h3>", unsafe_allow_html=True)
-
-        st.subheader("Detalhamento dos lançamentos")
-        st.dataframe(df_resumo)
+                st.success("Lançamento atualizado!")
+        with col_b2:
+            if st.button("Excluir lançamento"):
+                df = df.drop(linha_selecionada)
+                salvar_dados(df)
+                st.success("Lançamento excluído!")
     else:
-        st.info("Selecione pelo menos um mês para ver o resumo.")
+        st.info("Nenhum lançamento para editar ou excluir.")
+
+# ---------------- RELATÓRIOS ----------------
+
+elif pagina == "Relatórios":
+    st.title("Relatórios mensais")
+
+    if df.empty:
+        st.info("Ainda não há lançamentos cadastrados.")
+    else:
+        df["vencimento"] = df["vencimento"].astype(str)
+        meses_disponiveis = sorted(df["vencimento"].unique())
+
+        mes_relatorio = st.selectbox(
+            "Selecione o mês para o relatório",
+            meses_disponiveis
+        )
+
+        df_mes = df[df["vencimento"] == mes_relatorio].copy()
+
+        st.subheader(f"Lançamentos de {mes_relatorio}")
+        st.dataframe(df_mes)
+
+        total_mes = df_mes["valor"].sum()
+        st.metric("Total do mês", formatar_moeda(total_mes))
+
+        st.markdown("---")
+        st.subheader("Exportar relatório")
+
+        # Exportar para Excel
+        if not df_mes.empty:
+            excel_buffer = df_mes.to_excel(index=False, sheet_name="Relatorio", engine="xlsxwriter")
+            st.download_button(
+                label="Baixar em Excel",
+                data=excel_buffer,
+                file_name=f"relatorio_{mes_relatorio}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+
+            # Exportar para CSV
+            csv_buffer = df_mes.to_csv(index=False).encode("utf-8")
+            st.download_button(
+                label="Baixar em CSV",
+                data=csv_buffer,
+                file_name=f"relatorio_{mes_relatorio}.csv",
+                mime="text/csv"
+            )
+        else:
+            st.info("Não há dados para o mês selecionado.")
