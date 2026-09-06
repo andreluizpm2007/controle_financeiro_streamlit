@@ -270,8 +270,19 @@ elif pagina == "Relatórios":
         st.subheader("Exportar relatório")
 
         # Exportar para Excel
-        if not df_mes.empty:
-            excel_buffer = df_mes.to_excel(index=False, sheet_name="Relatorio", engine="xlsxwriter")
+if not df_mes.empty:
+    from io import BytesIO
+
+    excel_buffer = BytesIO()
+    df_mes.to_excel(excel_buffer, index=False, sheet_name="Relatorio")
+    excel_buffer.seek(0)
+
+    st.download_button(
+        label="Baixar em Excel",
+        data=excel_buffer,
+        file_name=f"relatorio_{mes_relatorio}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
             st.download_button(
                 label="Baixar em Excel",
                 data=excel_buffer,
