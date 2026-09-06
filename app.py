@@ -1,6 +1,6 @@
+import streamlit as st
 st.set_page_config(page_title="Controle Financeiro", page_icon="favicon.png")
 
-import streamlit as st
 import pandas as pd
 import datetime as dt
 import uuid
