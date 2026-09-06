@@ -264,20 +264,17 @@ elif pagina == "Relatórios":
 
         if not df_mes.empty:
 
-            # Exportar para Excel (CORRIGIDO)
-            excel_buffer = BytesIO()
-            with pd.ExcelWriter(excel_buffer, engine="xlsxwriter") as writer:
-                df_mes.to_excel(writer, index=False, sheet_name="Relatorio")
-            excel_buffer.seek(0)
+            # Exportar "Excel" via CSV renomeado
+            excel_buffer = df_mes.to_csv(index=False).encode("utf-8")
 
             st.download_button(
                 label="Baixar em Excel",
                 data=excel_buffer,
                 file_name=f"relatorio_{mes_relatorio}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                mime="text/csv"
             )
 
-            # Exportar para CSV
+            # Exportar CSV normal
             csv_buffer = df_mes.to_csv(index=False).encode("utf-8")
             st.download_button(
                 label="Baixar em CSV",
