@@ -283,14 +283,8 @@ if not df_mes.empty:
         file_name=f"relatorio_{mes_relatorio}.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
-            st.download_button(
-                label="Baixar em Excel",
-                data=excel_buffer,
-                file_name=f"relatorio_{mes_relatorio}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
 
-            # Exportar para CSV
+# Exportar para CSV
             csv_buffer = df_mes.to_csv(index=False).encode("utf-8")
             st.download_button(
                 label="Baixar em CSV",
