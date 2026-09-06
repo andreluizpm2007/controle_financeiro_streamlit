@@ -49,10 +49,8 @@ def mascara_valor(valor_digitado):
         numeros = "0" + numeros
     return f"{numeros[:-2]},{numeros[-2:]}"
 
-
 def converter_para_float(valor_formatado):
     return float(valor_formatado.replace(".", "").replace(",", "."))
-
 
 def gerar_parcelas(id_compra, data_lancamento, descricao, categoria,
                    forma_pagamento, operadora, tipo,
@@ -265,9 +263,11 @@ elif pagina == "Relatórios":
         st.subheader("Exportar relatório")
 
         if not df_mes.empty:
-            # Exportar para Excel
+
+            # Exportar para Excel (CORRIGIDO)
             excel_buffer = BytesIO()
-            df_mes.to_excel(excel_buffer, index=False, sheet_name="Relatorio")
+            with pd.ExcelWriter(excel_buffer, engine="xlsxwriter") as writer:
+                df_mes.to_excel(writer, index=False, sheet_name="Relatorio")
             excel_buffer.seek(0)
 
             st.download_button(
@@ -285,5 +285,6 @@ elif pagina == "Relatórios":
                 file_name=f"relatorio_{mes_relatorio}.csv",
                 mime="text/csv"
             )
+
         else:
             st.info("Não há dados para o mês selecionado.")
