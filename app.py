@@ -1,18 +1,18 @@
 import streamlit as st
-st.set_page_config(
-    page_title="Controle Financeiro",
-    page_icon="favicon.png",
-    layout="wide"
-)
-
 import pandas as pd
 import datetime as dt
 import uuid
 import os
 from dateutil.relativedelta import relativedelta
+from io import BytesIO
 
 ARQUIVO = "financeiro.csv"
 
+st.set_page_config(
+    page_title="Controle Financeiro",
+    page_icon="favicon.png",
+    layout="wide"
+)
 
 # ---------------- Funções auxiliares ----------------
 
@@ -107,27 +107,23 @@ if pagina == "Dashboard":
         total_geral = df["valor"].sum()
         col_kpi1.metric("Total geral", formatar_moeda(total_geral))
 
-        # Total do mês atual
         mes_atual = dt.date.today().strftime("%Y-%m")
         df_mes_atual = df[df["vencimento"] == mes_atual]
         total_mes_atual = df_mes_atual["valor"].sum()
         col_kpi2.metric("Total do mês atual", formatar_moeda(total_mes_atual))
 
-        # Número de lançamentos
         col_kpi3.metric("Quantidade de lançamentos", len(df))
 
         st.markdown("---")
 
         col_g1, col_g2 = st.columns(2)
 
-        # Gráfico por mês de vencimento
         with col_g1:
             st.subheader("Total por mês de vencimento")
             df_mes = df.groupby("vencimento")["valor"].sum().reset_index()
             df_mes = df_mes.sort_values("vencimento")
             st.bar_chart(df_mes.set_index("vencimento"))
 
-        # Gráfico por categoria
         with col_g2:
             st.subheader("Total por categoria")
             if "categoria" in df.columns:
@@ -138,7 +134,6 @@ if pagina == "Dashboard":
                 st.info("Não há coluna de categoria para agrupar.")
 
         st.markdown("---")
-
         st.subheader("Tabela geral")
         st.dataframe(df)
 
@@ -269,22 +264,20 @@ elif pagina == "Relatórios":
         st.markdown("---")
         st.subheader("Exportar relatório")
 
-        # Exportar para Excel
-if not df_mes.empty:
-    from io import BytesIO
+        if not df_mes.empty:
+            # Exportar para Excel
+            excel_buffer = BytesIO()
+            df_mes.to_excel(excel_buffer, index=False, sheet_name="Relatorio")
+            excel_buffer.seek(0)
 
-    excel_buffer = BytesIO()
-    df_mes.to_excel(excel_buffer, index=False, sheet_name="Relatorio")
-    excel_buffer.seek(0)
+            st.download_button(
+                label="Baixar em Excel",
+                data=excel_buffer,
+                file_name=f"relatorio_{mes_relatorio}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
 
-    st.download_button(
-        label="Baixar em Excel",
-        data=excel_buffer,
-        file_name=f"relatorio_{mes_relatorio}.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
-
-# Exportar para CSV
+            # Exportar para CSV
             csv_buffer = df_mes.to_csv(index=False).encode("utf-8")
             st.download_button(
                 label="Baixar em CSV",
