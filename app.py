@@ -231,10 +231,26 @@ elif pagina == "Lançamentos":
         dados = df.loc[linha_selecionada]
 
         nova_descricao = st.text_input("Descrição", dados["descricao"], key="edit_desc")
-        nova_categoria = st.selectbox("Categoria", categorias_fixas, index=categorias_fixas.index(dados["categoria"]) if dados["categoria"] in categorias_fixas else 0)
-        nova_forma = st.selectbox("Forma de pagamento/recebimento", formas_fixas, index=formas_fixas.index(dados["forma_pagamento"]) if dados["forma_pagamento"] in formas_fixas else 0)
-        nova_operadora = st.selectbox("Operadora", operadoras_fixas, index=operadoras_fixas.index(dados["operadora"]) if dados["operadora"] in operadoras_fixas else 0)
-        novo_tipo = st.selectbox("Tipo", tipos_fixos, index=tipos_fixos.index(dados["tipo"]) if dados["tipo"] in tipos_fixos else 0)
+        nova_categoria = st.selectbox(
+            "Categoria",
+            categorias_fixas,
+            index=categorias_fixas.index(dados["categoria"]) if dados["categoria"] in categorias_fixas else 0
+        )
+        nova_forma = st.selectbox(
+            "Forma de pagamento/recebimento",
+            formas_fixas,
+            index=formas_fixas.index(dados["forma_pagamento"]) if dados["forma_pagamento"] in formas_fixas else 0
+        )
+        nova_operadora = st.selectbox(
+            "Operadora",
+            operadoras_fixas,
+            index=operadoras_fixas.index(dados["operadora"]) if dados["operadora"] in operadoras_fixas else 0
+        )
+        novo_tipo = st.selectbox(
+            "Tipo",
+            tipos_fixos,
+            index=tipos_fixos.index(dados["tipo"]) if dados["tipo"] in tipos_fixos else 0
+        )
         novo_valor = st.number_input("Valor", value=float(dados["valor"]), key="edit_valor")
         novo_vencimento = st.text_input("Vencimento (AAAA-MM)", dados["vencimento"], key="edit_venc")
 
@@ -419,6 +435,5 @@ elif pagina == "Relatórios":
                 mime="application/pdf"
             )
 
-               else:
+        else:
             st.info("Nenhum dado encontrado com os filtros selecionados.")
-
