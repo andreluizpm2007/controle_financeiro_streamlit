@@ -419,4 +419,6 @@ elif pagina == "Relatórios":
                 mime="application/pdf"
             )
 
-        else:
+               else:
+            st.info("Nenhum dado encontrado com os filtros selecionados.")
+
