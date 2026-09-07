@@ -142,15 +142,39 @@ elif pagina == "Lançamentos":
 
     st.header("Novo lançamento")
 
+    # LISTAS FIXAS PARA PREENCHIMENTO AUTOMÁTICO
+    categorias_fixas = [
+        "mercantil", "alimentação", "lazer", "educação", "saúde", "farmácia",
+        "combustível", "manutenção", "empresa", "investimentos", "empréstimos",
+        "imposto", "assinatura/stream", "salário/renda", "doação/presentes",
+        "cota", "outros"
+    ]
+
+    formas_fixas = [
+        "PMCE", "Pref. Crato", "depósito", "crédito", "débito",
+        "Pix", "dinheiro em espécie", "cheque"
+    ]
+
+    operadoras_fixas = [
+        "Itaú - Personnalité", "Itaú - Credicard", "Itaú - Gold", "Itaú - Luiza Ouro",
+        "BB - Ourocard", "Bradesco - Infinite Prime", "Bradesco - Amazon Platinum",
+        "Caixa - Sim", "Mercado Pago", "Nubank", "Santander - SX Master",
+        "Shopee - Empréstimo", "Mercado Pago - Empréstimo", "BV", "Bradesco",
+        "BB", "Caixa", "Itaú", "Nubank", "Livelo", "outros"
+    ]
+
+    tipos_fixos = ["entrada", "saída"]
+
     col1, col2 = st.columns(2)
     with col1:
         data_lancamento = st.date_input("Data de lançamento", dt.date.today())
         descricao = st.text_input("Descrição")
-        categoria = st.text_input("Categoria")
-        forma_pagamento = st.text_input("Forma de pagamento")
+        categoria = st.selectbox("Categoria", categorias_fixas)
+        forma_pagamento = st.selectbox("Forma de pagamento/recebimento", formas_fixas)
+
     with col2:
-        operadora = st.text_input("Operadora (se houver)")
-        tipo = st.selectbox("Tipo", ["Crédito", "Débito", "Dinheiro", "Pix", "Outro"])
+        operadora = st.selectbox("Operadora", operadoras_fixas)
+        tipo = st.selectbox("Tipo", tipos_fixos)
 
     st.subheader("Valor e parcelamento")
 
@@ -188,7 +212,7 @@ elif pagina == "Lançamentos":
             df = pd.concat([df, df_novo], ignore_index=True)
             salvar_dados(df)
 
-            st.success("Lançamento salvo com parcelamento automático!")
+            st.success("Lançamento salvo com sucesso!")
         except Exception as e:
             st.error(f"Erro ao salvar: {e}")
 
@@ -207,10 +231,10 @@ elif pagina == "Lançamentos":
         dados = df.loc[linha_selecionada]
 
         nova_descricao = st.text_input("Descrição", dados["descricao"], key="edit_desc")
-        nova_categoria = st.text_input("Categoria", dados["categoria"], key="edit_cat")
-        nova_forma = st.text_input("Forma de pagamento", dados["forma_pagamento"], key="edit_forma")
-        nova_operadora = st.text_input("Operadora", dados["operadora"], key="edit_operadora")
-        novo_tipo = st.text_input("Tipo", dados["tipo"], key="edit_tipo")
+        nova_categoria = st.selectbox("Categoria", categorias_fixas, index=categorias_fixas.index(dados["categoria"]) if dados["categoria"] in categorias_fixas else 0)
+        nova_forma = st.selectbox("Forma de pagamento/recebimento", formas_fixas, index=formas_fixas.index(dados["forma_pagamento"]) if dados["forma_pagamento"] in formas_fixas else 0)
+        nova_operadora = st.selectbox("Operadora", operadoras_fixas, index=operadoras_fixas.index(dados["operadora"]) if dados["operadora"] in operadoras_fixas else 0)
+        novo_tipo = st.selectbox("Tipo", tipos_fixos, index=tipos_fixos.index(dados["tipo"]) if dados["tipo"] in tipos_fixos else 0)
         novo_valor = st.number_input("Valor", value=float(dados["valor"]), key="edit_valor")
         novo_vencimento = st.text_input("Vencimento (AAAA-MM)", dados["vencimento"], key="edit_venc")
 
@@ -254,7 +278,7 @@ elif pagina == "Relatórios":
         ]
 
         formas_fixas = [
-            "PMCE", "PREF. CRATO", "depósito", "crédito", "débito",
+            "PMCE", "Pref. Crato", "depósito", "crédito", "débito",
             "Pix", "dinheiro em espécie", "cheque"
         ]
 
@@ -383,7 +407,6 @@ elif pagina == "Relatórios":
                 mime="text/csv"
             )
 
-            # Exportar PDF sem bibliotecas externas
             html = df_filtrado.to_html(index=False)
             pdf_buffer = BytesIO()
             pdf_buffer.write(html.encode("utf-8"))
@@ -397,4 +420,3 @@ elif pagina == "Relatórios":
             )
 
         else:
-            st.info("Nenhum dado encontrado com os filtros selecionados.")
