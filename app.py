@@ -238,50 +238,163 @@ elif pagina == "Lançamentos":
 # ---------------- RELATÓRIOS ----------------
 
 elif pagina == "Relatórios":
-    st.title("Relatórios mensais")
+    st.title("Relatórios completos")
 
     if df.empty:
         st.info("Ainda não há lançamentos cadastrados.")
     else:
         df["vencimento"] = df["vencimento"].astype(str)
-        meses_disponiveis = sorted(df["vencimento"].unique())
+        df["data_lancamento"] = pd.to_datetime(df["data_lancamento"], errors="coerce")
 
-        mes_relatorio = st.selectbox(
-            "Selecione o mês para o relatório",
-            meses_disponiveis
-        )
+        categorias_fixas = [
+            "mercantil", "alimentação", "lazer", "educação", "saúde", "farmácia",
+            "combustível", "manutenção", "empresa", "investimentos", "empréstimos",
+            "imposto", "assinatura/stream", "salário/renda", "doação/presentes",
+            "cota", "outros"
+        ]
 
-        df_mes = df[df["vencimento"] == mes_relatorio].copy()
+        formas_fixas = [
+            "PMCE", "PREF. CRATO", "depósito", "crédito", "débito",
+            "Pix", "dinheiro em espécie", "cheque"
+        ]
 
-        st.subheader(f"Lançamentos de {mes_relatorio}")
-        st.dataframe(df_mes)
+        operadoras_fixas = [
+            "Itaú - Personnalité", "Itaú - Credicard", "Itaú - Gold", "Itaú - Luiza Ouro",
+            "BB - Ourocard", "Bradesco - Infinite Prime", "Bradesco - Amazon Platinum",
+            "Caixa - Sim", "Mercado Pago", "Nubank", "Santander - SX Master",
+            "Shopee - Empréstimo", "Mercado Pago - Empréstimo", "BV", "Bradesco",
+            "BB", "Caixa", "Itaú", "Nubank", "Livelo", "outros"
+        ]
 
-        total_mes = df_mes["valor"].sum()
-        st.metric("Total do mês", formatar_moeda(total_mes))
+        tipos_fixos = ["entrada", "saída"]
+
+        anos_disponiveis = sorted(df["data_lancamento"].dt.year.dropna().unique())
+
+        st.subheader("Filtros avançados")
+
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            filtro_meses = st.multiselect("Meses", sorted(df["vencimento"].unique()))
+
+        with col2:
+            filtro_anos = st.multiselect("Ano", anos_disponiveis)
+
+        with col3:
+            filtro_categorias = st.multiselect("Categorias", categorias_fixas)
+
+        col4, col5, col6 = st.columns(3)
+
+        with col4:
+            filtro_formas = st.multiselect("Formas de pagamento/recebimento", formas_fixas)
+
+        with col5:
+            filtro_operadoras = st.multiselect("Operadoras", operadoras_fixas)
+
+        with col6:
+            filtro_tipos = st.multiselect("Tipo", tipos_fixos)
+
+        col7, col8 = st.columns(2)
+
+        with col7:
+            data_inicio = st.date_input("Data inicial", value=None)
+
+        with col8:
+            data_fim = st.date_input("Data final", value=None)
+
+        col9, col10 = st.columns(2)
+
+        with col9:
+            filtro_descricao = st.text_input("Descrição contém (opcional)")
+
+        with col10:
+            filtro_parcela = st.text_input("Parcela (ex: 1/3)")
+
+        col11, col12 = st.columns(2)
+
+        with col11:
+            valor_min = st.number_input("Valor mínimo", min_value=0.0, value=0.0)
+
+        with col12:
+            valor_max = st.number_input("Valor máximo", min_value=0.0, value=999999.0)
+
+        df_filtrado = df.copy()
+
+        if filtro_meses:
+            df_filtrado = df_filtrado[df_filtrado["vencimento"].isin(filtro_meses)]
+
+        if filtro_anos:
+            df_filtrado = df_filtrado[df_filtrado["data_lancamento"].dt.year.isin(filtro_anos)]
+
+        if data_inicio:
+            df_filtrado = df_filtrado[df_filtrado["data_lancamento"] >= pd.to_datetime(data_inicio)]
+
+        if data_fim:
+            df_filtrado = df_filtrado[df_filtrado["data_lancamento"] <= pd.to_datetime(data_fim)]
+
+        if filtro_categorias:
+            df_filtrado = df_filtrado[df_filtrado["categoria"].str.lower().isin([c.lower() for c in filtro_categorias])]
+
+        if filtro_formas:
+            df_filtrado = df_filtrado[df_filtrado["forma_pagamento"].str.lower().isin([f.lower() for f in filtro_formas])]
+
+        if filtro_operadoras:
+            df_filtrado = df_filtrado[df_filtrado["operadora"].str.lower().isin([o.lower() for o in filtro_operadoras])]
+
+        if filtro_tipos:
+            df_filtrado = df_filtrado[df_filtrado["tipo"].str.lower().isin([t.lower() for t in filtro_tipos])]
+
+        if filtro_descricao.strip() != "":
+            df_filtrado = df_filtrado[df_filtrado["descricao"].str.contains(filtro_descricao, case=False, na=False)]
+
+        df_filtrado = df_filtrado[(df_filtrado["valor"] >= valor_min) & (df_filtrado["valor"] <= valor_max)]
+
+        if filtro_parcela.strip() != "":
+            parte_atual, parte_total = filtro_parcela.split("/") if "/" in filtro_parcela else ("", "")
+            if parte_atual:
+                df_filtrado = df_filtrado[df_filtrado["parcela_atual"] == parte_atual]
+            if parte_total:
+                df_filtrado = df_filtrado[df_filtrado["total_parcelas"] == parte_total]
+
+        st.subheader(f"Resultados ({len(df_filtrado)})")
+        st.dataframe(df_filtrado)
+
+        total_filtrado = df_filtrado["valor"].sum()
+        st.metric("Total filtrado", formatar_moeda(total_filtrado))
 
         st.markdown("---")
         st.subheader("Exportar relatório")
 
-        if not df_mes.empty:
+        if not df_filtrado.empty:
 
-            # Exportar "Excel" via CSV renomeado
-            excel_buffer = df_mes.to_csv(index=False).encode("utf-8")
-
+            excel_buffer = df_filtrado.to_csv(index=False).encode("utf-8")
             st.download_button(
                 label="Baixar em Excel",
                 data=excel_buffer,
-                file_name=f"relatorio_{mes_relatorio}.xlsx",
+                file_name="relatorio_filtrado.xlsx",
                 mime="text/csv"
             )
 
-            # Exportar CSV normal
-            csv_buffer = df_mes.to_csv(index=False).encode("utf-8")
+            csv_buffer = df_filtrado.to_csv(index=False).encode("utf-8")
             st.download_button(
                 label="Baixar em CSV",
                 data=csv_buffer,
-                file_name=f"relatorio_{mes_relatorio}.csv",
+                file_name="relatorio_filtrado.csv",
                 mime="text/csv"
             )
 
+            # Exportar PDF sem bibliotecas externas
+            html = df_filtrado.to_html(index=False)
+            pdf_buffer = BytesIO()
+            pdf_buffer.write(html.encode("utf-8"))
+            pdf_buffer.seek(0)
+
+            st.download_button(
+                label="Baixar em PDF",
+                data=pdf_buffer,
+                file_name="relatorio_filtrado.pdf",
+                mime="application/pdf"
+            )
+
         else:
-            st.info("Não há dados para o mês selecionado.")
+            st.info("Nenhum dado encontrado com os filtros selecionados.")
