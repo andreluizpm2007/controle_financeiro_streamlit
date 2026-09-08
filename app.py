@@ -216,12 +216,13 @@ elif pagina == "Lançamentos":
             st.error(f"Erro ao salvar: {e}")
 
     st.markdown("---")
-    st.header("Editar ou excluir lançamentos")
+       st.header("Editar ou excluir lançamentos")
 
     if not df.empty:
         linha_selecionada = st.selectbox(
             "Selecione uma linha para editar ou excluir",
             df.index,
+            key="linha_edicao",
             format_func=lambda x: f"{df.loc[x, 'descricao']} - Parcela {df.loc[x, 'parcela_atual']}/{df.loc[x, 'total_parcelas']} - {df.loc[x, 'vencimento']}"
         )
 
@@ -230,16 +231,16 @@ elif pagina == "Lançamentos":
         dados = df.loc[linha_selecionada]
 
         nova_descricao = st.text_input("Descrição", dados["descricao"], key="edit_desc")
-        nova_categoria = st.selectbox("Categoria", categorias_fixas)
-        nova_forma = st.selectbox("Forma de pagamento/recebimento", formas_fixas)
-        nova_operadora = st.selectbox("Operadora", operadoras_fixas)
-        novo_tipo = st.selectbox("Tipo", tipos_fixos)
+        nova_categoria = st.selectbox("Categoria", categorias_fixas, key="edit_categoria")
+        nova_forma = st.selectbox("Forma de pagamento/recebimento", formas_fixas, key="edit_forma")
+        nova_operadora = st.selectbox("Operadora", operadoras_fixas, key="edit_operadora")
+        novo_tipo = st.selectbox("Tipo", tipos_fixos, key="edit_tipo")
         novo_valor = st.number_input("Valor", value=float(dados["valor"]), key="edit_valor")
         novo_vencimento = st.text_input("Vencimento (AAAA-MM)", dados["vencimento"], key="edit_venc")
 
         col_b1, col_b2 = st.columns(2)
         with col_b1:
-            if st.button("Salvar edição"):
+            if st.button("Salvar edição", key="btn_salvar_edicao"):
                 df.loc[linha_selecionada, "descricao"] = nova_descricao
                 df.loc[linha_selecionada, "categoria"] = nova_categoria
                 df.loc[linha_selecionada, "forma_pagamento"] = nova_forma
@@ -250,13 +251,15 @@ elif pagina == "Lançamentos":
 
                 salvar_dados(df)
                 st.success("Lançamento atualizado!")
+
         with col_b2:
-            if st.button("Excluir lançamento"):
+            if st.button("Excluir lançamento", key="btn_excluir"):
                 df = df.drop(linha_selecionada)
                 salvar_dados(df)
                 st.success("Lançamento excluído!")
     else:
         st.info("Nenhum lançamento para editar ou excluir.")
+
 
 # ---------------- RELATÓRIOS ----------------
 
