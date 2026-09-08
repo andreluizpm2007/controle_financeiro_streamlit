@@ -216,7 +216,7 @@ elif pagina == "Lançamentos":
             st.error(f"Erro ao salvar: {e}")
 
     st.markdown("---")
-       st.header("Editar ou excluir lançamentos")
+    st.header("Editar ou excluir lançamentos")
 
     if not df.empty:
         linha_selecionada = st.selectbox(
