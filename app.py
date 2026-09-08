@@ -41,16 +41,25 @@ def carregar_dados():
 def salvar_dados(df):
     df.to_csv(ARQUIVO, index=False)
 
-# ✔ zeros automáticos
+# --------- MÁSCARA DE VALOR (zeros automáticos, apaga quando vazio) ---------
+
 def mascara_valor(valor_digitado):
     numeros = ''.join(filter(str.isdigit, valor_digitado))
+
+    # Se o usuário apagar tudo, deixa vazio
     if numeros == "":
-        return "0,00"
+        return ""
+
+    # Garante pelo menos 3 dígitos
     while len(numeros) < 3:
         numeros = "0" + numeros
+
+    # Converte para formato brasileiro
     return f"{numeros[:-2]},{numeros[-2:]}"
 
 def converter_para_float(valor_formatado):
+    if valor_formatado == "":
+        return 0.0
     return float(valor_formatado.replace(".", "").replace(",", "."))
 
 def gerar_parcelas(id_compra, data_lancamento, descricao, categoria,
@@ -90,7 +99,8 @@ df = carregar_dados()
 st.sidebar.title("Menu")
 pagina = st.sidebar.radio(
     "Navegação",
-    ["Dashboard", "Lançamentos", "Relatórios"]
+    ["Dashboard", "Lançamentos", "Relatórios"],
+    key="menu_navegacao"
 )
 
 # ---------------- DASHBOARD ----------------
@@ -179,15 +189,15 @@ elif pagina == "Lançamentos":
 
     colv1, colv2, colv3 = st.columns(3)
     with colv1:
-        valor_digitado = st.text_input("Valor (R$)", value="0,00")
+        valor_digitado = st.text_input("Valor (R$)", value="0,00", key="valor_novo")
         valor_formatado = mascara_valor(valor_digitado)
-        st.write("Valor formatado:", valor_formatado)
+        st.write("Valor formatado:", valor_formatado if valor_formatado != "" else "—")
     with colv2:
         qtd_parcelas = st.number_input("Quantidade de parcelas", min_value=1, max_value=48, value=1)
     with colv3:
         primeiro_vencimento = st.date_input("Vencimento da 1ª parcela", dt.date.today())
 
-    if st.button("Salvar lançamento"):
+    if st.button("Salvar lançamento", key="btn_salvar_novo"):
         try:
             valor_float = converter_para_float(valor_formatado)
             id_compra = str(uuid.uuid4())[:8]
@@ -407,4 +417,17 @@ elif pagina == "Relatórios":
                 mime="text/csv"
             )
 
-            html = df_fil
+            html = df_filtrado.to_html(index=False)
+            pdf_buffer = BytesIO()
+            pdf_buffer.write(html.encode("utf-8"))
+            pdf_buffer.seek(0)
+
+            st.download_button(
+                label="Baixar em PDF",
+                data=pdf_buffer,
+                file_name="relatorio_filtrado.pdf",
+                mime="application/pdf"
+            )
+
+        else:
+            st.info("Nenhum dado encontrado com os filtros selecionados.")
